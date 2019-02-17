@@ -1,0 +1,201 @@
+%download EEGLAB, run EEGLAB GUI, file, import data, use EEGLAB functions, matalb array,
+%eeglab_data.set
+%OR
+%load existing data set, eeglab_data.set
+
+chan1t=ALLEEG.times(1,:);
+chan1d=ALLEEG.data(1,:);
+d=double(chan1d);
+
+%% removes a lot of noise and smooths the curve
+sgo1=sgolayfilt(d,3,41);
+smo1=smooth(sgo1,20);
+
+%% plots the smooth data
+figure(1)
+plot(chan1t,smo1)
+title('Smoothed data (time domain)');
+ylabel('uV');
+xlabel('Seconds (s)');
+
+%% plots original data
+figure(2)
+subplot(2,3,1)
+plot(chan1t,chan1d)
+title('Original Data');
+ylabel('uV');
+xlabel('Seconds (s)');
+
+%% 10th order butterworth filter for the beta rhythm
+[b a]=butter(10,[18 30]/50); %.6
+f=filter(b,a,d);
+
+%% plot beta filtered data
+figure(2)
+subplot(2,3,2)
+plot(chan1t,f)
+title('Filtered data (time domain)-Beta');
+ylabel('uV');
+xlabel('Seconds (s)');
+%ylim([-500 1000])
+
+%% FFT of original data
+Fs = 100;
+N = length(d);
+dfft = fft(d);
+dfft = dfft(1:N/2+1);
+ps = (1/(N*Fs))*abs(dfft).^2;
+ps(2:end-1) = 2*ps(2:end-1);
+freq = 0:Fs/N:Fs/2;
+
+%% plot fft of original data
+figure(2)
+subplot(2,3,4)
+plot(freq,20*log(ps))
+title('FFT of original data');
+xlabel('Frequency (Hz)'); 
+ylabel('dB');
+grid on
+
+%% fft of beta rhythm
+Nf = length(f);
+dfftf = fft(f);
+dfftf = dfftf(1:Nf/2+1);
+psf = (1/(Nf*Fs))*abs(dfftf).^2;
+psf(2:end-1) = 2*psf(2:end-1);
+freqf = 0:Fs/Nf:Fs/2;
+
+%% plot of fft of beta rhythm
+figure(2)
+subplot(2,3,5)
+plot(freqf,20*log(psf))
+title('FFT of filtered data-Beta');
+xlabel('Frequency (Hz)'); 
+ylabel('dB');
+grid on 
+
+%% 10th order butterworth filter mu rhythm
+[e c]=butter(10,[7 12]/50); %.24
+
+%% fft of mu rhythm
+fmu=filter(e,c,d);
+Nfmu = length(fmu);
+dfftfmu = fft(fmu);
+dfftfmu = dfftfmu(1:Nfmu/2+1);
+psfmu = (1/(Nfmu*Fs))*abs(dfftfmu).^2;
+psfmu(2:end-1) = 2*psfmu(2:end-1);
+freqfmu = 0:Fs/Nfmu:Fs/2;
+
+%% plot of fft of mu rhythm
+figure(2)
+subplot(2,3,6)
+plot(freqfmu,20*log(psfmu))
+title('FFT of filtered data-Mu');
+xlabel('Frequency (Hz)'); 
+ylabel('dB');
+grid on 
+
+%% plot of smooth mu rhythm
+figure(2)
+subplot(2,3,3)
+plot(chan1t,fmu)
+ylabel('uV');
+xlabel('Seconds (s)');
+%ylim([-500 1000])
+title('Filtered Data (time domain)-Mu')
+
+%% find peaks of section of smooth data 
+section = chan1t<=.5e5;
+new_time = chan1t.*section;
+nz = new_time(new_time~=0); %removes 0 from matrix
+new_pts = length(nz); %finds matrix length
+new_data = smo1(1:new_pts); %gives new data matrix
+[peak1,index1] = findpeaks(new_data);
+cindex1 = chan1t(index1+1);
+% figure(3)
+% plot(q,y,cindex1,peak1,'ro')
+
+%% find peaks of smooth data
+[max_peak,max_index] = findpeaks(smo1);
+cindex2 = chan1t(max_index);
+% figure(4)
+% plot(chan1t,smo1,cindex2,peak2,'ro')
+
+%% find minimums of smooth data
+[min_peak,min_index] = findpeaks(-smo1);
+cinv_index = chan1t(min_index);
+figure(5)
+%plot(chan1t,-smo1,cinv_index,inv_peak,'bo')
+plot(chan1t,smo1,cindex2,max_peak,'ro',cinv_index,-min_peak,'bo')
+ylabel('uV');
+xlabel('Seconds (s)');
+title('Minimums (blue) and Maximums (red)')
+grid on
+
+%% Calculating Envelopes
+[Yupper,Ylower] = envelope(smo1);
+figure(6)
+subplot(2,1,1)
+plot(chan1t,Yupper)
+xlabel('Seconds (s)');
+ylabel('uV');
+title('Upper Envelope')
+
+subplot(2,1,2)
+plot(chan1t,Ylower)
+xlabel('Seconds (s)');
+ylabel('uV');
+title('Lower Envelope')
+
+%% Determine the local mean
+loc_mean = (Yupper+Ylower)/2;
+
+%% Extract the Detail
+%subtract local mean from original signal
+detail = smo1-loc_mean;
+
+%% IMF 
+%First condition
+max_num = length(max_peak);
+min_num = length(min_peak);
+
+%Second condition 
+% max_min = sum(max_peak)-sum(min_peak);
+% mm = length(max_peak)+length(min_peak);
+% ave_max_min = max_min/mm;
+
+up_env_leng = length(Yupper);
+down_env_leng = length(Ylower);
+up_envsum = sum(Yupper);
+down_envsum = sum(Ylower);
+
+env_ave = (up_envsum+down_envsum)/(up_env_leng+down_env_leng)
+
+%(abs(env_ave) > .001 || abs(max_num-min_num)> 1) || 
+while detail~=0
+    rt = smo1 - detail;
+    
+    smo1 = rt;
+    
+    [max_peak,max_index] = findpeaks(smo1);
+    cindex2 = chan1t(max_index);
+    
+    [min_peak,min_index] = findpeaks(-smo1);
+    cinv_index = chan1t(min_index);
+    
+    [Yupper,Ylower] = envelope(smo1);
+    
+    loc_mean = (Yupper+Ylower)/2;
+    
+    detail = smo1-loc_mean;
+    
+    up_env_leng = length(Yupper);
+    down_env_leng = length(Ylower);
+    up_envsum = sum(Yupper);
+    down_envsum = sum(Ylower);
+    env_ave = (up_envsum+down_envsum)/(up_env_leng+down_env_leng)
+    
+end 
+env_ave
+
+plot(chan1t,smo1)
